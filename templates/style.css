@@ -1,0 +1,231 @@
+body {
+    flex-direction: column;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    font-family: sans-serif;
+}
+
+#game-info {
+    height: 60px;
+    /* Fixed height to prevent layout shift */
+    text-align: center;
+}
+
+#turn-indicator {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+/* Style for game over message */
+#game-over-message {
+    font-size: 20px;
+    color: #d9534f;
+    font-weight: bold;
+}
+
+#container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.capture-area {
+    width: 100px;
+    height: 480px;
+    border: 2px dashed #888;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    gap: 5px;
+    background-color: #ddd;
+    overflow-y: auto;
+}
+
+.capture-area h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+}
+
+#board-container {
+    display: grid;
+    grid-template-columns: 30px auto;
+    grid-template-rows: auto 30px;
+    gap: 5px;
+}
+
+.chessboard {
+    display: grid;
+    grid-template-columns: repeat(8, 60px);
+    grid-template-rows: repeat(8, 60px);
+    border: 4px solid #333;
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+}
+
+.rank-labels {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.file-labels {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.rank-labels span,
+.file-labels span {
+    font-family: sans-serif;
+    font-weight: bold;
+    color: #555;
+}
+
+.square {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-image 0.1s ease-in-out;
+}
+
+.white {
+    background-color: #eee;
+}
+
+.black {
+    background-color: #444;
+}
+
+.piece {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    cursor: grab;
+}
+
+.piece:active {
+    cursor: grabbing;
+}
+
+.valid-move-hover-empty {
+    background-image: radial-gradient(circle, transparent 25%, rgba(30, 180, 30, 0.7) 27%, rgba(30, 180, 30, 0) 45%);
+}
+
+.valid-move-hover-capture {
+    background-image: radial-gradient(circle, transparent 25%, rgba(220, 20, 60, 0.8) 27%, rgba(220, 20, 60, 0) 45%);
+}
+
+.selected-highlight {
+    background-color: #baca44 !important;
+    /* Use !important to override .white/.black */
+}
+
+.piece.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.in-check {
+    box-shadow: inset 0 0 0 5px #d9534f;
+    /* Red inner border */
+}
+
+
+.last-move-highlight-white-from,
+.last-move-highlight-black-from {
+    background-color: rgba(205, 215, 65, 0.6) !important;
+    /* A transparent yellow for the "from" square */
+}
+
+.last-move-highlight-white-to {
+    background-color: rgba(220, 228, 90, 0.9) !important;
+    /* A brighter yellow for White's "to" square */
+}
+
+.last-move-highlight-black-to {
+    background-color: rgba(135, 175, 75, 0.9) !important;
+    /* A greenish-yellow for Black's "to" square */
+}
+
+#game-over-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    /* Changed from none to flex */
+    flex-direction: column;
+    /* To stack button below text */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    display: none;
+    /* Add this back to hide it initially */
+}
+
+#game-over-text {
+    color: white;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    border-radius: 10px;
+    background-color: #333;
+}
+
+#new-game-btn {
+    margin-top: 20px;
+    padding: 12px 25px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#new-game-btn:hover {
+    background-color: #ddd;
+}
+
+#ai-status {
+    font-size: 16px;
+    color: #007bff;
+    height: 20px;
+    /* Reserve space to prevent layout shift */
+    font-style: italic;
+}
+
+.board-disabled {
+    pointer-events: none;
+    opacity: 0.9;
+}
+
+button#resetBtn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    /* Position it clearly */
+    font-size: 16px;
+    padding: 8px 12px;
+    cursor: pointer;
+    z-index: 10;
+    /* Make sure it's above other elements */
+}
