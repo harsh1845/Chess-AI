@@ -485,7 +485,7 @@ function getAllLegalMoves(playerColor, state) {
     const opponentColor = playerColor === 'white' ? 'black' : 'white';
 
     for (const move of pseudoLegalMoves) {
-        const tempState = JSON.parse(JSON.stringify(state));
+        const tempState = fastClone(state);
         const piece = tempState.board[move.from.row][move.from.col];
         tempState.board[move.to.row][move.to.col] = piece;
         tempState.board[move.from.row][move.from.col] = null;
@@ -603,14 +603,14 @@ function evaluateBoard(board) {
     }
     return totalScore;
 }
-
 function minimax(state, depth, alpha, beta, isMaximizingPlayer) {
-     if (depth === 0) {
-        return quiescenceSearch(state, alpha, beta, isMaximizingPlayer);
-     }
-    // *** TRANSPOSITION TABLE LOOKUP (BEGIN) ***
-    // Use a simplified FEN for more cache hits (board state + current player)
-    const fenKey = state.board.toString() + state.currentPlayer;
+    // 1. Base case: Quiescence Search (Pass 0 as initial Q-depth)
+    if (depth === 0) {
+        return quiescenceSearch(state, alpha, beta, isMaximizingPlayer, 0);
+    }
+
+    // 2. Transposition Table Lookup
+    const fenKey = generateSimpleKey(state);
     const tableEntry = transpositionTable[fenKey];
 
     if (tableEntry && tableEntry.depth >= depth) {
@@ -626,17 +626,21 @@ function minimax(state, depth, alpha, beta, isMaximizingPlayer) {
             return tableEntry.value;
         }
     }
-    // *** TRANSPOSITION TABLE LOOKUP (END) ***
-
-    if (depth === 0) {
-        return evaluateBoard(state.board);
-    }
 
     const legalMoves = getAllLegalMoves(state.currentPlayer, state);
+
+    // 3. Move Ordering
+    legalMoves.sort((a, b) => {
+        const pieceA = state.board[a.to.row][a.to.col];
+        const pieceB = state.board[b.to.row][b.to.col];
+        const scoreA = pieceA ? (pieceValues[pieceA.type] || 0) : 0;
+        const scoreB = pieceB ? (pieceValues[pieceB.type] || 0) : 0;
+        return scoreB - scoreA;
+    });
+
     if (legalMoves.length === 0) {
         const kingPos = findKing(state.currentPlayer, state);
         const oppColor = state.currentPlayer === 'white' ? 'black' : 'white';
-
         if (kingPos && isSquareAttacked(kingPos, oppColor, state)) {
             return isMaximizingPlayer ? -Infinity : Infinity;
         }
@@ -649,118 +653,118 @@ function minimax(state, depth, alpha, beta, isMaximizingPlayer) {
         let maxEval = -Infinity;
         for (const move of legalMoves) {
             const tempState = applyMoveToState(state, move);
-            const eval = minimax(tempState, depth - 1, alpha, beta, false);
-            maxEval = Math.max(maxEval, eval);
-            alpha = Math.max(alpha, eval);
+            // FIX: Renamed variable 'eval' to 'evaluation'
+            const evaluation = minimax(tempState, depth - 1, alpha, beta, false);
+            maxEval = Math.max(maxEval, evaluation);
+            alpha = Math.max(alpha, evaluation);
             if (beta <= alpha) break;
         }
-        // *** TRANSPOSITION TABLE STORE (BEGIN) ***
+        
         let flag = 'EXACT';
-        if (maxEval <= originalAlpha) {
-            flag = 'UPPERBOUND'; // We failed to raise alpha, so this is an upper bound.
-        } else if (maxEval >= beta) {
-            flag = 'LOWERBOUND'; // We caused a beta-cutoff, so this is a lower bound.
-        }
+        if (maxEval <= originalAlpha) flag = 'UPPERBOUND';
+        else if (maxEval >= beta) flag = 'LOWERBOUND';
+        
         transpositionTable[fenKey] = { value: maxEval, depth: depth, flag: flag };
-        // *** TRANSPOSITION TABLE STORE (END) ***
         return maxEval;
-    }
-    else {
+    } else {
         let minEval = Infinity;
         for (const move of legalMoves) {
             const tempState = applyMoveToState(state, move);
-            const eval = minimax(tempState, depth - 1, alpha, beta, true);
-            minEval = Math.min(minEval, eval);
-            beta = Math.min(beta, eval);
+            // FIX: Renamed variable 'eval' to 'evaluation'
+            const evaluation = minimax(tempState, depth - 1, alpha, beta, true);
+            minEval = Math.min(minEval, evaluation);
+            beta = Math.min(beta, evaluation);
             if (beta <= alpha) break;
         }
-        // *** TRANSPOSITION TABLE STORE (BEGIN) ***
+        
         let flag = 'EXACT';
-        if (minEval <= alpha) {
-            flag = 'UPPERBOUND';
-        } else if (minEval >= beta) {
-            flag = 'LOWERBOUND';
-        }
+        if (minEval <= alpha) flag = 'UPPERBOUND';
+        else if (minEval >= beta) flag = 'LOWERBOUND';
+        
         transpositionTable[fenKey] = { value: minEval, depth: depth, flag: flag };
-        // *** TRANSPOSITION TABLE STORE (END) ***
         return minEval;
     }
 }
 
-function quiescenceSearch(state, alpha, beta, isMaximizingPlayer) {
-    const stand_pat = evaluateBoard(state.board); // Evaluate the current "do-nothing" score.
+function quiescenceSearch(state, alpha, beta, isMaximizingPlayer, depth) {
+    const stand_pat = evaluateBoard(state.board);
+    
+    // 1. Check Hard Depth Limit
+    if (depth > 7) return stand_pat;
 
     if (isMaximizingPlayer) {
-        alpha = Math.max(alpha, stand_pat);
+        if (stand_pat >= beta) return beta; // Stand-pat pruning
+        if (stand_pat > alpha) alpha = stand_pat;
     } else {
-        beta = Math.min(beta, stand_pat);
+        if (stand_pat <= alpha) return alpha; // Stand-pat pruning
+        if (stand_pat < beta) beta = stand_pat;
     }
 
-    if (alpha >= beta) {
-        return isMaximizingPlayer ? beta : alpha;
-    }
+    // 2. Get only interesting moves (Captures and Checks)
+    // Since we use getAllLegalMoves, these are GUARANTEED legal. 
+    // We don't need manual legality checks or JSON.parse inside the loop.
     const nonQuietMoves = getAllLegalMoves(state.currentPlayer, state).filter(move => {
         const isCapture = state.board[move.to.row][move.to.col] !== null;
         return isCapture || move.isCheck;
     });
 
-
-    const captureMoves = _getCaptureMoves(state.currentPlayer, state);
-
-    // Optional: Sort moves to check more valuable captures first (improves pruning).
-    captureMoves.sort((a, b) => {
-        const aVal = pieceValues[state.board[a.to.row][a.to.col].type];
-        const bVal = pieceValues[state.board[b.to.row][b.to.col].type];
-        return bVal - aVal;
+    // 3. Sort by MVV-LVA (Crucial for performance)
+    nonQuietMoves.sort((a, b) => {
+        const pieceA = state.board[a.to.row][a.to.col];
+        const pieceB = state.board[b.to.row][b.to.col];
+        const scoreA = pieceA ? (pieceValues[pieceA.type] || 0) : 0;
+        const scoreB = pieceB ? (pieceValues[pieceB.type] || 0) : 0;
+        return scoreB - scoreA;
     });
 
-    
-    for (const move of captureMoves) {
-        const tempStateForCheck = JSON.parse(JSON.stringify(state));
-        const pieceToMove = tempStateForCheck.board[move.from.row][move.from.col];
-        tempStateForCheck.board[move.to.row][move.to.col] = pieceToMove;
-        tempStateForCheck.board[move.from.row][move.from.col] = null;
-        
-        const kingPos = findKing(state.currentPlayer, tempStateForCheck);
-        if (kingPos && isSquareAttacked(kingPos, state.currentPlayer === 'white' ? 'black' : 'white', tempStateForCheck)) {
-            continue; // This capture is illegal (e.g., moves a pinned piece), so skip it.
-        }
-
-        // If the move is legal, proceed with the recursive search.
+    // 4. Single Loop
+    for (const move of nonQuietMoves) {
         const tempState = applyMoveToState(state, move);
-        const score = quiescenceSearch(tempState, alpha, beta, !isMaximizingPlayer);
+        const score = quiescenceSearch(tempState, alpha, beta, !isMaximizingPlayer, depth + 1);
 
         if (isMaximizingPlayer) {
-            alpha = Math.max(alpha, score);
+            if (score >= beta) return beta; // Beta Cutoff
+            if (score > alpha) alpha = score;
         } else {
-            beta = Math.min(beta, score);
-        }
-
-        if (alpha >= beta) {
-            break; // Pruning
-        }
-    }
-
-    for (const move of nonQuietMoves) { // Use the new list of moves
-        const tempState = applyMoveToState(state, move);
-        const score = quiescenceSearch(tempState, alpha, beta, !isMaximizingPlayer);
-
-        if (isMaximizingPlayer) {
-            alpha = Math.max(alpha, score);
-        } else {
-            beta = Math.min(beta, score);
-        }
-
-        if (alpha >= beta) {
-            break;
+            if (score <= alpha) return alpha; // Alpha Cutoff
+            if (score < beta) beta = score;
         }
     }
 
     return isMaximizingPlayer ? alpha : beta;
 }
 
+function fastClone(state) {
+    // 1. Create a new board array (faster than mapping)
+    const newBoard = new Array(8);
+    for (let r = 0; r < 8; r++) {
+        newBoard[r] = new Array(8);
+        for (let c = 0; c < 8; c++) {
+            const p = state.board[r][c];
+            // Shallow copy the piece object is enough if you don't mutate pieces directly
+            newBoard[r][c] = p ? { type: p.type, color: p.color } : null; 
+        }
+    }
+
+    // 2. Return the new state object manually
+    return {
+        board: newBoard,
+        currentPlayer: state.currentPlayer,
+        castling: {
+            white: { K: state.castling.white.K, Q: state.castling.white.Q },
+            black: { k: state.castling.black.k, q: state.castling.black.q }
+        },
+        enPassantTarget: state.enPassantTarget ? { ...state.enPassantTarget } : null,
+        // AI logic rarely needs the full history of captured pieces, just the board values
+        capturedPieces: { white: [], black: [] }, 
+        isGameOver: state.isGameOver,
+        kingInCheck: state.kingInCheck,
+        lastMove: state.lastMove
+    };
+}
+
 function applyMoveToState(state, move) {
-    const newState = JSON.parse(JSON.stringify(state));
+    const newState = fastClone(state);
     const piece = newState.board[move.from.row][move.from.col];
     newState.board[move.to.row][move.to.col] = piece;
     newState.board[move.from.row][move.from.col] = null;
@@ -783,6 +787,23 @@ function applyMoveToState(state, move) {
     }
     newState.currentPlayer = newState.currentPlayer === 'white' ? 'black' : 'white'; return newState;
 }
+
+function generateSimpleKey(state) {
+    let key = "";
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const p = state.board[r][c];
+            if (p) {
+                // e.g., "wK" (White King), "bP" (Black Pawn) + position index
+                key += `${p.color[0]}${p.type[0]}${r}${c}`;
+            }
+        }
+    }
+    return key + state.currentPlayer + 
+           state.castling.white.K + state.castling.white.Q + 
+           state.castling.black.k + state.castling.black.q;
+}
+
 function findBestMove() {
 
     const legalMoves = getAllLegalMoves(AI_PLAYER, gameState).sort(() => 0.5 - Math.random());
